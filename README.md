@@ -2,23 +2,39 @@
 
 ```mermaid
 graph TD
-  %% Controller & switch
-  c0[Floodlight c0<br/>127.0.0.1:6653]
-  s1[(OpenFlow switch s1)]
 
-  c0 -- remote --> s1
+    %% Przełączniki
+    s0((s0 core))
+    s1((s1 klienci))
+    s2((s2 atakujący))
+    s3((s3 DMZ))
 
-  %% Hosts
-  hA[hA< 10.0.0.11]
-  hC[hC 10.0.0.21]
-  hW[hW 10.0.0.80]
-  hM[hM 10.0.0.254]
-  hI[hI sniff]
+    %% Hosty klienci
+    hC1[hC1 10.0.0.11]
+    hC2[hC2 10.0.0.12]
 
-  %% Links
-  s1 --- hA
-  s1 --- hC
-  s1 --- hW
-  s1 --- hM
-  s1 -. port-mirror .- hI
+    %% Hosty atakujący
+    hA1[hA1 10.0.0.21]
+    hA2[hA2 10.0.0.22]
+
+    %% Hosty DMZ
+    hDNS[hDNS 10.0.0.53 DNS]
+    hWEB[hWEB 10.0.0.80 WWW]
+
+    %% Połączenia hostów z przełącznikami
+    hC1 --- s1
+    hC2 --- s1
+
+    hA1 --- s2
+    hA2 --- s2
+
+    hDNS --- s3
+    hWEB --- s3
+
+    %% Połączenia między przełącznikami (core)
+    s1 --- s0
+    s2 --- s0
+    s3 --- s0
+```
+```
 ```
