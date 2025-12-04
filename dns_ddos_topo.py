@@ -6,15 +6,12 @@ Topologia do testów wykrywania ruchu DNS o wzorcach DDoS
 Mininet + zewnętrzny kontroler (Floodlight / OpenDaylight / inny) jako RemoteController.
 
 Uruchomienie:
-    1. Na VM / hoście z Floodlight:
+    1. Floodlight:
         java -jar floodlight.jar
 
-    2. Na VM z Mininetem (z tym skryptem):
+    2.  Uruchomienie topologi 
         sudo python dns_ddos_topo.py --controller-ip 127.0.0.1 --controller-port 6653
 
-    3. W konsoli Minineta (CLI) możesz np.:
-        mininet> hC1 ping -c3 hDNS
-        mininet> hA1 hping3 -2 10.0.0.53 -p 53 --flood &
 """
 
 from mininet.topo import Topo
@@ -57,22 +54,95 @@ class DnsDdosTopo(Topo):
 
         # --- Linki hostów (TCLink: można modyfikować bw/delay) ---
         # Klienci
-        self.addLink(hC1, s1, bw=10, delay='2ms', use_htb=True)
-        self.addLink(hC2, s1, bw=10, delay='2ms', use_htb=True)
+        self.addLink(hC1, s1, bw=10, delay='2ms')
+        self.addLink(hC2, s1, bw=10, delay='2ms')
 
         # Atakujący
-        self.addLink(hA1, s2, bw=10, delay='2ms', use_htb=True)
-        self.addLink(hA2, s2, bw=10, delay='2ms', use_htb=True)
+        self.addLink(hA1, s2, bw=10, delay='2ms')
+        self.addLink(hA2, s2, bw=10, delay='2ms')
 
         # DMZ
-        self.addLink(hDNS, s3, bw=20, delay='1ms', use_htb=True)
-        self.addLink(hWEB, s3, bw=20, delay='1ms', use_htb=True)
+        self.addLink(hDNS, s3, bw=20, delay='1ms')
+        self.addLink(hWEB, s3, bw=20, delay='1ms')
 
         # --- Linki między przełącznikami ---
         # krawędzie -> core
-        self.addLink(s1, s0, bw=100, delay='1ms', use_htb=True)
-        self.addLink(s2, s0, bw=100, delay='1ms', use_htb=True)
-        self.addLink(s3, s0, bw=100, delay='1ms', use_htb=True)
+        self.addLink(s1, s0, bw=100, delay='1ms')
+        self.addLink(s2, s0, bw=100, delay='1ms')
+        self.addLink(s3, s0, bw=100, delay='1ms')
+
+
+
+def start_dns_server(hDNS):
+    """
+    Uruchamia prosty serwer DNS (dnsmasq) na hoście hDNS.
+    Wymaga zainstalowanego dnsmasq w systemie.
+    """
+    # Na wszelki wypadek ubijamy stare instancje
+    hDNS.cmd("pkill dnsmasq || true")
+
+    # Minimalna konfiguracja w /tmp
+    hDNS.cmd("echo 'listen-address=10.0.0.53' >> /tmp/dnsmasq.conf")
+    hDNS.cmd("echo 'bind-interfaces' >> /tmp/dnsmasq.conf")
+    hDNS.cmd("echo 'address=/example.com/10.0.0.80' >> /tmp/dnsmasq.conf")
+
+    # Uruchomienie w tle
+    hDNS.cmd(
+        "dnsmasq --no-daemon "
+        "--conf-file=/tmp/dnsmasq.conf "
+        "--log-queries --log-facility=/tmp/dnsmasq.log &"
+    )
+    info("*** Serwer DNS (dnsmasq) uruchomiony na hDNS\n")
+
+
+def start_legit_dns_traffic(hC1, hC2):
+    """
+    Generuje 'normalny' ruch DNS z hostów klienckich
+    - okresowe zapytania dig do hDNS.
+    """
+    for h in (hC1, hC2):
+        # Pętla w tle: co 1 s zapytanie o example.com
+        h.cmd(
+            "while true; do "
+            "  dig @10.0.0.53 example.com +short >/dev/null 2>&1; "
+            "  sleep 1; "
+            "done &"
+        )
+    info("*** ruch DNS z hC1 i hC2 uruchomiony\n")
+
+
+def start_dns_attack(hA1, hA2):
+    """
+    Generuje ruch 'atakujący' na port 53 hDNS.
+    Przykład z użyciem hping3 (UDP flood).
+    """
+    # Ubijamy stare hpingi na wszelki wypadek
+    hA1.cmd("pkill hping3 || true")
+    hA2.cmd("pkill hping3 || true")
+
+    # Flood UDP na port 53 (DNS)
+    hA1.cmd("hping3 -2 10.0.0.53 -p 53 --flood >/tmp/hA1_hping.log 2>&1 &")
+    hA2.cmd("hping3 -2 10.0.0.53 -p 53 --flood >/tmp/hA2_hping.log 2>&1 &")
+
+    info("*** Atak DNS flood z hA1 i hA2 uruchomiony\n")
+
+
+def start_http_server(hWEB):
+    hWEB.cmd("pkill python || true")
+    hWEB.cmd("cd /tmp && python -m SimpleHTTPServer 80 >/tmp/http.log 2>&1 &")
+    info("*** Prost y serwer HTTP na hWEB (port 80) uruchomiony\n")
+
+
+def start_http_clients(hC1, hC2):
+    for h in (hC1, hC2):
+        h.cmd(
+            "while true; do "
+            "  curl -s http://10.0.0.80/ >/dev/null 2>&1; "
+            "  sleep 2; "
+            "done &"
+        )
+    info("*** Legitny ruch HTTP z hC1 i hC2 uruchomiony\n")
+
 
 
 def start_network(controller_ip, controller_port):
@@ -118,6 +188,22 @@ def start_network(controller_ip, controller_port):
     info("  mininet> hC1 dig @10.0.0.53 example.com\n")
     info("  mininet> hA1 hping3 -2 10.0.0.53 -p 53 --flood &\n")
     info("  mininet> hA2 hping3 -2 10.0.0.53 -p 53 --flood &\n\n")
+
+     # Pobierz hosty
+    hC1 = net.get('hC1')
+    hC2 = net.get('hC2')
+    hA1 = net.get('hA1')
+    hA2 = net.get('hA2')
+    hDNS = net.get('hDNS')
+    hWEB = net.get('hWEB')
+
+    start_dns_server(hDNS)
+    start_legit_dns_traffic(hC1, hC2)
+
+    #Te funkcje blokuja na razie CLI, potem poprawie
+
+    #start_http_server(hWEB)
+    #start_http_clients(hC1, hC2)
 
     # Wejście do interaktywnej konsoli
     CLI(net)
