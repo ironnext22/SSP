@@ -143,6 +143,48 @@ def start_http_clients(hC1, hC2):
         )
     info("*** Legitny ruch HTTP z hC1 i hC2 uruchomiony\n")
 
+def start_iperf_background_traffic(hWEB, hC1, hC2, hA1=None, hA2=None):
+    """
+    Uruchamia ruch tła z użyciem iperfa:
+    - na hWEB: serwer TCP (port 5001) i serwer UDP (port 5002),
+    - na hC1/hC2: klienci TCP do hWEB,
+    - opcjonalnie na hA1/hA2: klienci UDP do hWEB.
+
+    Wymaga zainstalowanego 'iperf' w systemie hosta (VM z Mininetem).
+    """
+
+    # Na wszelki wypadek ubijamy stare iperfy na tych hostach
+    for h in [hWEB, hC1, hC2, hA1, hA2]:
+        if h is not None:
+            h.cmd("pkill iperf || true")
+
+    # --- Serwery na hWEB ---
+    # Serwer TCP na porcie 5001
+    hWEB.cmd("iperf -s -p 5001 >/tmp/iperf_tcp_server.log 2>&1 &")
+
+    # Serwer UDP na porcie 5002
+    hWEB.cmd("iperf -s -u -p 5002 >/tmp/iperf_udp_server.log 2>&1 &")
+
+    # --- Klienci TCP (ruch 'normalny') z hC1 i hC2 ---
+    # -t 300   -> 300 sekund (5 minut)
+    # -i 10    -> raport co 10 sekund
+    # &        -> w tle
+    hC1.cmd("iperf -c {} -p 5001 -t 300 -i 10 >/tmp/iperf_hC1_tcp.log 2>&1 &"
+            .format(hWEB.IP()))
+    hC2.cmd("iperf -c {} -p 5001 -t 300 -i 10 >/tmp/iperf_hC2_tcp.log 2>&1 &"
+            .format(hWEB.IP()))
+
+    # --- Opcjonalni klienci UDP (dodatkowe obciążenie) z hA1 i hA2 ---
+    # -u       -> UDP
+    # -b 5M    -> 5 Mbit/s na klienta
+    if hA1 is not None:
+        hA1.cmd("iperf -c {} -u -p 5002 -b 5M -t 300 -i 10 "
+                ">/tmp/iperf_hA1_udp.log 2>&1 &"
+                .format(hWEB.IP()))
+    if hA2 is not None:
+        hA2.cmd("iperf -c {} -u -p 5002 -b 5M -t 300 -i 10 "
+                ">/tmp/iperf_hA2_udp.log 2>&1 &"
+                .format(hWEB.IP()))
 
 
 def start_network(controller_ip, controller_port):
@@ -204,6 +246,8 @@ def start_network(controller_ip, controller_port):
 
     #start_http_server(hWEB)
     #start_http_clients(hC1, hC2)
+
+    start_iperf_background_traffic(hWEB, hC1, hC2)
 
     # Wejście do interaktywnej konsoli
     CLI(net)
