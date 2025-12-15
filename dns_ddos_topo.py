@@ -126,11 +126,14 @@ def start_dns_attack(hA1, hA2):
 
     info("*** Atak DNS flood z hA1 i hA2 uruchomiony\n")
 
-
 def start_http_server(hWEB):
-    hWEB.cmd("pkill python || true")
-    hWEB.cmd("cd /tmp && python -m SimpleHTTPServer 80 >/tmp/http.log 2>&1 &")
-    info("*** Prost y serwer HTTP na hWEB (port 80) uruchomiony\n")
+    hWEB.cmd("pkill -f 'python.*-m http\\.server 80' || true")
+    hWEB.cmd("pkill -f 'python.*-m SimpleHTTPServer 80' || true")
+    hWEB.cmd("cd /tmp && nohup python3 -m http.server 80 "
+             ">/tmp/http.log 2>&1 </dev/null &")
+
+    info("*** Prosty serwer HTTP na hWEB (port 80) uruchomiony\n")
+
 
 
 def start_http_clients(hC1, hC2):
@@ -242,12 +245,12 @@ def start_network(controller_ip, controller_port):
     start_dns_server(hDNS)
     start_legit_dns_traffic(hC1, hC2)
 
-    #Te funkcje blokuja na razie CLI, potem poprawie
 
-    #start_http_server(hWEB)
-    #start_http_clients(hC1, hC2)
+    start_http_server(hWEB)
+    start_http_clients(hC1, hC2)
+    start_dns_attack(hA1, hA2)
 
-    start_iperf_background_traffic(hWEB, hC1, hC2)
+    #start_iperf_background_traffic(hWEB, hC1, hC2)
 
     # Wejście do interaktywnej konsoli
     CLI(net)
