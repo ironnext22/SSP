@@ -5,7 +5,7 @@
 # ==============================
 DNS_SERVER="10.0.0.53"
 DOMAIN_BASE="example.com"
-PIDFILE="/tmp/dns_attack.pid"
+PIDFILE="/tmp/dns_volume_attack.pid"
 
 # ==============================
 # PARAMETR: LICZBA WORKERÓW
