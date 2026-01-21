@@ -38,7 +38,6 @@ class DnsDdosTopo(Topo):
         hA2 = self.addHost('hA2', ip='10.0.0.22/24')
 
         hDNS = self.addHost('hDNS', ip='10.0.0.53/24')
-        hWEB = self.addHost('hWEB', ip='10.0.0.80/24')
 
         self.addLink(hC1, s1, bw=10, delay='2ms')
         self.addLink(hC2, s1, bw=10, delay='2ms')
@@ -47,7 +46,6 @@ class DnsDdosTopo(Topo):
         self.addLink(hA2, s2, bw=10, delay='2ms')
 
         self.addLink(hDNS, s3, bw=20, delay='1ms')
-        self.addLink(hWEB, s3, bw=20, delay='1ms')
 
         self.addLink(s1, s0, bw=100, delay='1ms')
         self.addLink(s2, s0, bw=100, delay='1ms')
@@ -67,33 +65,6 @@ def start_dns_server(hDNS):
     )
     info("*** Serwer DNS (dnsmasq) uruchomiony na hDNS\n")
 
-def start_dns_attack(hA1, hA2, workers=128, sleep_s=0.0):
-    """
-    Szybszy DNS flood: wiele równoleg�~Bych p�~Ytli 'dig' na host.
-    workers  - ile równoleg�~Bych generatorów na host (np. 8/16/32)
-    sleep_s  - opcjonalna pauza mi�~Ydzy zapytaniami (0.0 = max)
-    """
-    for h in (hA1, hA2):
-        h.cmd("pkill dig || true")
-        h.cmd("pkill -f 'while true; do.*dig @10.0.0.53' || true")
-
-        # Odpalamy wiele p�~Ytli w tle
-        for i in range(workers):
-            if sleep_s > 0.0:
-                h.cmd(
-                    "sh -c 'while true; do "
-                    "name=$(cat /proc/sys/kernel/random/uuid | tr -d \"-\" | cut -c1-10); "
-                    "dig @10.0.0.53 ${name}.example.com +tries=1 +timeout=1 >/dev/null 2>&1; "
-                    "sleep %s; "
-                    "done' &" % sleep_s
-                )
-            else:
-                h.cmd(
-                    "sh -c 'while true; do "
-                    "name=$(cat /proc/sys/kernel/random/uuid | tr -d \"-\" | cut -c1-10); "
-                    "dig @10.0.0.53 ${name}.example.com +tries=1 +timeout=1 >/dev/null 2>&1; "
-                    "done' &"
-                )
 
 
 def start_legit_dns_traffic(hC1, hC2):
@@ -123,46 +94,9 @@ def start_legit_dns_traffic(hC1, hC2):
 
 
 
-def start_http_server(hWEB):
-    hWEB.cmd("pkill -f 'python.*-m http\\.server 80' || true")
-    hWEB.cmd("pkill -f 'python.*-m SimpleHTTPServer 80' || true")
-    hWEB.cmd("cd /tmp && nohup python3 -m http.server 80 "
-             ">/tmp/http.log 2>&1 </dev/null &")
-    info("*** Prosty serwer HTTP na hWEB (port 80) uruchomiony\n")
 
 
-def start_http_clients(hC1, hC2):
-    for h in (hC1, hC2):
-        h.cmd(
-            "while true; do "
-            "curl -s http://10.0.0.80/ >/dev/null 2>&1; "
-            "sleep 2; "
-            "done &"
-        )
-    info("*** Legitny ruch HTTP z hC1 i hC2 uruchomiony\n")
 
-
-def start_iperf_background_traffic(hWEB, hC1, hC2, hA1=None, hA2=None):
-    for h in [hWEB, hC1, hC2, hA1, hA2]:
-        if h is not None:
-            h.cmd("pkill iperf || true")
-
-    hWEB.cmd("iperf -s -p 5001 >/tmp/iperf_tcp_server.log 2>&1 &")
-    hWEB.cmd("iperf -s -u -p 5002 >/tmp/iperf_udp_server.log 2>&1 &")
-
-    hC1.cmd("iperf -c {} -p 5001 -t 300 -i 10 >/tmp/iperf_hC1_tcp.log 2>&1 &"
-            .format(hWEB.IP()))
-    hC2.cmd("iperf -c {} -p 5001 -t 300 -i 10 >/tmp/iperf_hC2_tcp.log 2>&1 &"
-            .format(hWEB.IP()))
-
-    if hA1 is not None:
-        hA1.cmd("iperf -c {} -u -p 5002 -b 5M -t 300 -i 10 "
-                ">/tmp/iperf_hA1_udp.log 2>&1 &"
-                .format(hWEB.IP()))
-    if hA2 is not None:
-        hA2.cmd("iperf -c {} -u -p 5002 -b 5M -t 300 -i 10 "
-                ">/tmp/iperf_hA2_udp.log 2>&1 &"
-                .format(hWEB.IP()))
 
 
 def start_network(controller_ip, controller_port):
@@ -192,14 +126,10 @@ def start_network(controller_ip, controller_port):
     hA1 = net.get('hA1')
     hA2 = net.get('hA2')
     hDNS = net.get('hDNS')
-    hWEB = net.get('hWEB')
 
     start_dns_server(hDNS)
     start_legit_dns_traffic(hC1, hC2)
-    start_http_server(hWEB)
-    start_http_clients(hC1, hC2)
 
-    start_legit_dns_traffic(hC1, hC2)
 
 
     CLI(net)
