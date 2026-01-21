@@ -19,7 +19,6 @@ graph TD
 
     %% Hosty DMZ
     hDNS[hDNS 10.0.0.53 DNS]
-    hWEB[hWEB 10.0.0.80 WWW]
 
     %% Połączenia hostów z przełącznikami
     hC1 --- s1
@@ -29,7 +28,6 @@ graph TD
     hA2 --- s2
 
     hDNS --- s3
-    hWEB --- s3
 
     %% Połączenia między przełącznikami (core)
     s1 --- s0
