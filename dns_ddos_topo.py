@@ -64,12 +64,6 @@ def start_dns_server(hDNS):
 
 
 def start_legit_dns_traffic(hC1, hC2):
-    """
-    LEGIT DNS TRAFFIC – OD ZERA
-    - losowy wolumen 4–8 pkt/s
-    - losowy wybór domen
-    - zmiany co sekundę
-    """
 
     domains = "www.example.com api.example.com mail.example.com cdn.example.com"
 
