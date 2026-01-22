@@ -1,10 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""
-Topologia do testów wykrywania ruchu DNS o wzorcach DDoS
-Mininet + zewnętrzny kontroler (Floodlight / OpenDaylight / inny) jako RemoteController.
-"""
 
 from mininet.topo import Topo
 from mininet.net import Mininet
