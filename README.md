@@ -124,19 +124,89 @@ Stop all attacks:
 - Run:
   bash stop_attacks.sh
 
+Detection Method (Volume + Entropy)
+----------------------------------
+The Floodlight module performs anomaly detection on DNS traffic using two
+complementary indicators calculated per domain in fixed time windows.
 
-Detection Logic
----------------
-The detector works in fixed time windows (1 second by default):
+### 1) Traffic Extraction (DNS UDP/53)
+The detector analyzes only DNS queries transported over UDP:
+- Ethernet type: IPv4
+- IP protocol: UDP
+- UDP destination port: 53
 
-- Volume: number of DNS queries per domain per window
-- Entropy: Shannon entropy of queried subdomains
+For each matching packet, the module parses the DNS payload and extracts:
+- full queried name (QNAME), e.g. `a1b2c3.example.com`
+- base domain, e.g. `example.com` (second-level + TLD)
 
-A DNS flood is detected when:
-- Volume increases significantly compared to historical baseline, or
-- Entropy increases significantly compared to historical baseline
+The base domain is used as the aggregation key for statistics.
 
-Both metrics are calculated using a sliding window history.
+### 2) Time Windowing
+Traffic is processed in constant windows:
+- `WINDOW_MS = 1000 ms`
+
+For each domain and each 1-second window the controller builds a list of
+observed QNAME values (subdomains).
+
+### 3) Metrics Computed Per Window
+For every domain in a given window the module computes:
+
+**A) Query Volume**
+Number of DNS packets to the domain within the current window:
+- `volume(domain) = number_of_dns_queries_in_window`
+
+**B) Entropy of Subdomains**
+To capture randomness typical for DNS flooding (randomized subdomains), Shannon
+entropy is calculated over QNAME frequency distribution:
+
+- Let `p_i` be the probability of QNAME i in the window.
+- Shannon entropy:
+
+`H(domain) = - Σ p_i log2(p_i)`
+
+Interpretation:
+- `H ≈ 0` → repeated queries to the same QNAME (no randomness)
+- high `H` → many distinct subdomains, typical for entropy-based DNS flood
+
+### 4) Baseline and Thresholding (Sliding History)
+The detector maintains a sliding history (baseline) for each domain:
+- `HISTORY_SIZE = 30` windows
+
+From this history it computes:
+- mean volume: `vMean`
+- std volume: `vStd`
+- mean entropy: `eMean`
+- std entropy: `eStd`
+
+Detection uses a simple statistical rule:
+
+An attack is flagged if **either**:
+- `volume > vMean + K * vStd`
+- `entropy > eMean + K * eStd`
+
+Where:
+- `K = 3` (3-sigma threshold)
+
+This approach allows:
+- detecting classic volume floods (high packet rate)
+- detecting entropy floods (random subdomains causing entropy spike)
+
+### 5) Logging Output
+Each analyzed window produces logs such as:
+
+`DNS WINDOW | domain=example.com volume=4 pkt/s entropy=0.8`
+
+When the baseline is available:
+`STATS | domain=example.com vMean=... vStd=... eMean=... eStd=...`
+
+When anomaly is detected:
+`DNS FLOOD DETECTED | domain=example.com volume=... entropy=...`
+
+### Important Notes
+- Entropy can become `0` when all queries in the window are identical.
+- The baseline starts working after ~30 seconds (HISTORY_SIZE windows).
+- Detection is domain-specific, i.e., each domain has its own baseline.
+
 
 
 Logs
