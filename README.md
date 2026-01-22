@@ -191,23 +191,6 @@ This approach allows:
 - detecting classic volume floods (high packet rate)
 - detecting entropy floods (random subdomains causing entropy spike)
 
-### 5) Logging Output
-Each analyzed window produces logs such as:
-
-`DNS WINDOW | domain=example.com volume=4 pkt/s entropy=0.8`
-
-When the baseline is available:
-`STATS | domain=example.com vMean=... vStd=... eMean=... eStd=...`
-
-When anomaly is detected:
-`DNS FLOOD DETECTED | domain=example.com volume=... entropy=...`
-
-### Important Notes
-- Entropy can become `0` when all queries in the window are identical.
-- The baseline starts working after ~30 seconds (HISTORY_SIZE windows).
-- Detection is domain-specific, i.e., each domain has its own baseline.
-
-
 
 Logs
 ----
